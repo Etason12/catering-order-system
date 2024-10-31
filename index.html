@@ -140,6 +140,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
     <script>
         document.getElementById('cateringForm').addEventListener('submit', function(e) {
             e.preventDefault();
@@ -197,43 +198,83 @@
             previewContainer.style.display = 'block';
         }
 
-        function downloadPDF() {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-            
-            doc.setFontSize(16);
-            doc.text('Catering Order', 105, 20, { align: 'center' });
-            
-            doc.setFontSize(12);
-            let yPos = 30;
-            
-            const content = document.getElementById('orderPreview');
-            const textContent = content.innerText.split('\n');
-            
-            textContent.forEach(line => {
-                if (line.trim() && !line.includes('Prepared by') && !line.includes('Approved by')) {
-                    if (line.includes('Client Information') || line.includes('Event Details') || line.includes('Services')) {
-                        doc.setFont('helvetica', 'bold');
-                        yPos += 5;
-                    } else {
-                        doc.setFont('helvetica', 'normal');
-                    }
-                    doc.text(line, 20, yPos);
-                    yPos += 7;
+        async function downloadPDF() {
+            // Load the PDF template
+            const templateUrl = 'template.pdf';
+            const templateBytes = await fetch(templateUrl).then(res => res.arrayBuffer());
+            const pdfDoc = await PDFLib.PDFDocument.load(templateBytes);
+            const form = pdfDoc.getForm();
+
+            // Get form data
+            const clientName = document.getElementById('clientName').value;
+            const companyName = document.getElementById('companyName').value;
+            const contactNumber = document.getElementById('contactNumber').value;
+            const eventName = document.getElementById('eventName').value;
+            const eventDate = document.getElementById('eventDate').value;
+            const eventTime = document.getElementById('eventTime').value;
+            const numAttendees = document.getElementById('numAttendees').value;
+            const eventLocation = document.getElementById('eventLocation').value;
+            const eventDuration = document.getElementById('eventDuration').value;
+            const services = document.getElementById('services').value;
+
+            // Fill form fields (assuming these field names exist in your template PDF)
+            try {
+                form.getTextField('clientName').setText(clientName);
+                form.getTextField('companyName').setText(companyName);
+                form.getTextField('contactNumber').setText(contactNumber);
+                form.getTextField('eventName').setText(eventName);
+                form.getTextField('eventDate').setText(eventDate);
+                form.getTextField('eventTime').setText(eventTime);
+                form.getTextField('numAttendees').setText(numAttendees);
+                form.getTextField('eventLocation').setText(eventLocation);
+                form.getTextField('eventDuration').setText(eventDuration);
+                form.getTextField('services').setText(services);
+
+                // Add signature images if they exist in the document
+                try {
+                    const hanaImageBytes = await fetch('hana.png').then(res => res.arrayBuffer());
+                    const abrhamImageBytes = await fetch('abrham.png').then(res => res.arrayBuffer());
+
+                    const hanaImage = await pdfDoc.embedPng(hanaImageBytes);
+                    const abrhamImage = await pdfDoc.embedPng(abrhamImageBytes);
+
+                    const page = pdfDoc.getPages()[0];
+                    
+                    // Adjust these coordinates based on your template
+                    page.drawImage(hanaImage, {
+                        x: 30,
+                        y: 100,
+                        width: 50,
+                        height: 25,
+                    });
+
+                    page.drawImage(abrhamImage, {
+                        x: 140,
+                        y: 100,
+                        width: 50,
+                        height: 25,
+                    });
+                } catch (error) {
+                    console.error('Error adding signatures:', error);
                 }
-            });
 
-            // Add signatures
-            yPos += 10;
-            doc.text('Prepared by: Hana Haftu', 40, yPos);
-            doc.text('Approved by: Abrham Seged', 150, yPos);
+                // Save the filled PDF
+                const pdfBytes = await pdfDoc.save();
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                
+                // Download the PDF
+                const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                const url = window.URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Catering_Order_${timestamp}.pdf`;
+                link.click();
+                window.URL.revokeObjectURL(url);
 
-            // Add default signature images
-            doc.addImage('hana.png', 'PNG', 30, yPos + 5, 50, 25);
-            doc.addImage('abrham.png', 'PNG', 140, yPos + 5, 50, 25);
-
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-            doc.save(`Catering_Order_${timestamp}.pdf`);
+            } catch (error) {
+                console.error('Error filling PDF form:', error);
+                alert('Error generating PDF. Please ensure all form fields exist in the template.');
+            }
         }
     </script>
 </body>
